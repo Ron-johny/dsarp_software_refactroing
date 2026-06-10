@@ -104,8 +104,6 @@ If you have run out of energy or time for your project, put a note at the top of
 
 # Skeletonizer
 
-"""
-
 # Java Architectural Skeletonizer
 
 ## Purpose:
@@ -160,4 +158,3 @@ pip install javalang networkx
 # pip install matplotlib
 
 ===========================================================
-"""
