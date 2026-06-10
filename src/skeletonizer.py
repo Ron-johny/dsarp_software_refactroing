@@ -608,6 +608,10 @@ def main():
         args.output
     )
 
+# Usage:
+# python skeletonizer.py /path/to/java/repo output_dir
+# Example:
+# python skeletonizer.py ./apache-tika ./output
 
 if __name__ == "__main__":
     main()
