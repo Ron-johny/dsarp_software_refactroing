@@ -1,0 +1,18 @@
+/tika
+/.venv
+.venv/
+tika/
+tika/*
+.vscode/
+venv/
+output/skeletons/*
+!output/skeletons/README.md
+
+# Python bytecode cache
+__pycache__/
+*.pyc
+
+# Local runtime outputs
+output/
+data/nsga2_batches.json
+data/nsga2_input_manifest.json
