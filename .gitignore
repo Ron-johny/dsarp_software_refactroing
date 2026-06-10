@@ -16,3 +16,8 @@ __pycache__/
 output/
 data/nsga2_batches.json
 data/nsga2_input_manifest.json
+
+/venv/
+.vscode/
+output/
+tika/
