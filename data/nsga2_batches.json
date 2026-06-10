@@ -1,0 +1,6 @@
+{
+  "BATCH_001": {
+    "target_classes": ["org.apache.tika.parser.AutoDetectParser"],
+    "smell_ids": ["DESIGN_02443"]
+  }
+}

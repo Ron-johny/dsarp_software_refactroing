@@ -1,0 +1,30 @@
+{
+  "system_graph": {
+    "nodes": [
+      {
+        "fqn": "org.apache.tika.parser.AutoDetectParser",
+        "metrics": {
+          "cbo": 20,
+          "wmc": 30,
+          "loc": 800
+        },
+        "methods": ["detect", "process"],
+        "detected_smells": ["DESIGN_02443"],
+        "file_path": "tika-core/src/main/java/org/apache/tika/parser/AutoDetectParser.java"
+      }
+    ],
+    "edges": []
+  },
+  "prioritization_registry": {
+    "ranked_smells": [
+      {
+        "smell_id": "DESIGN_02443",
+        "type": "God Class",
+        "level": "CLASS",
+        "target_class": "org.apache.tika.parser.AutoDetectParser",
+        "description": "God Class detection",
+        "impact_score": 0.85
+      }
+    ]
+  }
+}
