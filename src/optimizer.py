@@ -1,3 +1,5 @@
+# src/optimizer.py
+
 import json
 import logging
 import random
@@ -26,9 +28,11 @@ class NSGAIIBatchOptimizer:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.llm_model = llm_model
 
-    def run(self, max_generations: int = 20, population_size: int = 20) -> Dict[str, Any]:
+    def run(self, max_generations: int = 20, population_size: int = 20, debug_mode: bool = True) -> Dict[str, Any]:
         logger.info("=" * 80)
         logger.info("SBSE NSGA-II REFACTORING OPTIMIZATION PIPELINE (MODULAR)")
+        if debug_mode:
+            logger.info("⚠️ DEBUG/SAFETY MODE ACTIVE: Slicing workload for API safety!")
         logger.info("=" * 80)
 
         loader = ManifestLoader(self.manifest_path, self.batches_path)
@@ -40,6 +44,11 @@ class NSGAIIBatchOptimizer:
         batch_statistics = []
 
         for batch_num, (batch_id, batch_data) in enumerate(batches_metadata.items(), 1):
+            # 💡 TEMP SAFETY TWEAK 1: Only run the very first batch
+            if debug_mode and batch_num > 1:
+                logger.info("Debug Mode: Skipping subsequent batches.")
+                break
+
             logger.info(f"\n{'='*60}")
             logger.info(f"[BATCH {batch_num}] {batch_id}")
             logger.info(f"{'='*60}")
@@ -47,12 +56,23 @@ class NSGAIIBatchOptimizer:
             target_classes = batch_data.get("target_classes", [])
             smell_ids = batch_data.get("smell_ids", [])
 
+            # 💡 TEMP SAFETY TWEAK 2: Slice down to only 1 or 2 smells
+            if debug_mode and len(smell_ids) > 2:
+                logger.info(f"Debug Mode: Reducing smells from {len(smell_ids)} to 2 for API safety.")
+                smell_ids = smell_ids[:2]
+
             if not target_classes or not smell_ids:
                 logger.warning(f"[BATCH {batch_num}] Empty batch, skipping")
                 continue
 
             # Tier 2: Isolate + Seed
             isolated_graph, batch_smells = isolation_engine.isolate_batch(batch_id, target_classes, smell_ids)
+
+            # 💡 TEMP SAFETY TWEAK 3: Scale down internal generation settings
+            if debug_mode:
+                population_size = 4  # Minimal population to test crossovers
+                max_generations = 2  # Only run 2 generations to check loops
+                logger.info(f"Debug Mode: Overriding setup to Population={population_size}, Generations={max_generations}")
 
             seeder = LLMPopulationSeeder()
             seed_plans = seeder.seed_population(batch_id, target_classes, batch_smells, isolated_graph, population_size)

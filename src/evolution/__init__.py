@@ -1,3 +1,5 @@
+# src/evolution/__init__.py
+
 from src.evolution.fitness import FitnessEvaluator
 from src.evolution.gate import AntiRegressionGate
 from src.evolution.mutator import LLMSemanticMutator

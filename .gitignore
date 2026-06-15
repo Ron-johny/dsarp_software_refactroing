@@ -20,3 +20,12 @@ output/*
 !output/skeletons/
 output/skeletons/*
 !output/skeletons/README.md
+
+# 
+/tika/*
+tika/*
+.env
+.env*
+.env.*
+
+rough*

@@ -1,3 +1,4 @@
+# src/skeletonizer.py
 
 import os
 import re

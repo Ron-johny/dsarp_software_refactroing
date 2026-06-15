@@ -1,3 +1,5 @@
+# main.py
+
 from src.optimizer import NSGAIIBatchOptimizer
 
 """
@@ -21,14 +23,16 @@ Just a mapping with previous work: Delete it later
 
 def main():
     optimizer = NSGAIIBatchOptimizer(
-        manifest_path="data/nsga2_input_manifest.json",
-        batches_path="data/nsga2_batches.json",
-        output_dir="output"
+        manifest_path="data/input/nsga2_input_manifest.json",
+        batches_path="data/input/nsga2_batches.json",
+        output_dir="output",
+        llm_model="GEMINI"
     )
 
     optimizer.run(
         max_generations=20,
-        population_size=20
+        population_size=20,
+        debug_mode=True # For testing
     )
 
 

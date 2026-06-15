@@ -1,3 +1,5 @@
+# src/seeding/seeder.py
+
 import json
 import logging
 import networkx as nx
@@ -7,6 +9,7 @@ from pydantic import ValidationError
 from src.models import RefactoringPlan, RefactoringStep
 from src.manifest_builder import DetectedSmell
 from src.utils.mock_llm import generate_seed_plans
+from src.llm import LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +24,15 @@ class LLMPopulationSeeder:
     ) -> List[RefactoringPlan]:
         logger.info(f"[SEEDER] Generating seed plans for {batch_id}")
 
-        response_json = generate_seed_plans(batch_id, target_classes, batch_smells)
+        # response_json = generate_seed_plans(batch_id, target_classes, batch_smells)
+
+        client = LLMClient()
+
+        prompt = self._build_prompt(batch_id, target_classes, batch_smells)
+        raw = client.generate_json(prompt)
 
         try:
-            raw = json.loads(response_json)
+            # raw = json.loads(response_json)
             if not isinstance(raw, list):
                 raw = [raw]
             plans = []
@@ -56,3 +64,49 @@ class LLMPopulationSeeder:
             estimated_effort=15,
             risk_level="MEDIUM"
         )]
+    
+    def _build_prompt(self, batch_id, target_classes, batch_smells):
+        return f"""
+            You are a software architecture refactoring expert.
+
+            Generate 5 candidate refactoring plans.
+
+            Output JSON ONLY.
+
+            Schema:
+
+            [
+            {{
+                "plan_id": "...",
+                "title": "...",
+                "target_classes": [],
+                "smells_addressed": [],
+                "design_pattern": "...",
+                "rationale": "...",
+                "steps": [
+                {{
+                    "operation": "...",
+                    "target_class": "...",
+                    "source_class": null,
+                    "affected_methods": [],
+                    "estimated_loc_impact": 100,
+                    "rationale": "..."
+                }}
+                ],
+                "estimated_effort": 10,
+                "risk_level": "LOW"
+            }}
+            ]
+
+            Batch:
+
+            {batch_id}
+
+            Target Classes:
+
+            {target_classes}
+
+            Smells:
+
+            {[s.smell_type for s in batch_smells]}
+        """

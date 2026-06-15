@@ -44,8 +44,9 @@ class ManifestLoader:
         graph = nx.DiGraph()
 
         for node in manifest["system_graph"]["nodes"]:
+            node_id = node.get("fqn", node.get("id"))
             graph.add_node(
-                node["fqn"],
+                node_id,
                 **node["metrics"],
                 methods=node.get("methods", []),
                 detected_smells=node.get("detected_smells", []),
@@ -55,18 +56,40 @@ class ManifestLoader:
         for edge in manifest["system_graph"]["edges"]:
             graph.add_edge(edge["source"], edge["target"], weight=edge.get("weight", 1))
 
-        return (
-            graph,
-            batches,
-            manifest["prioritization_registry"]["ranked_smells"]
-        )
+        ranked_smells = manifest["prioritization_registry"]["ranked_smells"]
+
+        # 🛠️ Intercept and rebuild the batch metadata with accurate smell IDs
+        for batch_id, batch_data in batches.items():
+            # Initialize a real list to hold the true smell IDs for this batch
+            batch_data["smell_ids"] = []
+            
+        # Distribute smells to their respective batches based on execution_batch_id
+        for smell in ranked_smells:
+            bid = smell.get("execution_batch_id")
+            if bid in batches:
+                batches[bid]["smell_ids"].append(smell["smell_id"])
+
+        # Clean up batches that didn't end up matching any smells in the registry
+        processed_batches = {
+            bid: bdata for bid, bdata in batches.items() 
+            if bdata.get("smell_ids")
+        }
+
+        # Override total_smells with the true count
+        for bid, bdata in processed_batches.items():
+            bdata["total_smells"] = len(bdata["smell_ids"])
+
+        return graph, processed_batches, ranked_smells
 
 
 class BatchIsolationEngine:
 
     def __init__(self, graph, ranked_smells):
         self.graph = graph
-        self.smell_by_id = {s["smell_id"]: s for s in ranked_smells}
+        # Support fallback if the target property name varies across items
+        self.smell_by_id = {}
+        for s in ranked_smells:
+            self.smell_by_id[s["smell_id"]] = s
 
     def isolate_batch(self, batch_id, target_classes, smell_ids):
         nodes = set(target_classes)
@@ -82,12 +105,15 @@ class BatchIsolationEngine:
         for sid in smell_ids:
             if sid in self.smell_by_id:
                 s = self.smell_by_id[sid]
+                # Fallback handler for target class keys
+                target_fqn = s.get("target", s.get("target_class", ""))
+                
                 smells.append(
                     DetectedSmell(
                         smell_id=s["smell_id"],
                         smell_type=s["type"],
                         level=s["level"],
-                        target_fqn=s["target_class"],
+                        target_fqn=target_fqn,
                         description=s["description"],
                         file_path=s.get("file_path", ""),
                         impact_score=s["impact_score"],

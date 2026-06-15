@@ -1,3 +1,5 @@
+# src/serialization/serializer.py
+
 import json
 import logging
 from pathlib import Path

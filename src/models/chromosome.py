@@ -1,3 +1,5 @@
+# src/models/chromosome.py
+
 from dataclasses import dataclass, field
 from typing import List
 from src.models.refactoring import RefactoringStep

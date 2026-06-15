@@ -1,3 +1,5 @@
+# src/evolution/mutator.py
+
 import json
 import logging
 import random
@@ -10,6 +12,8 @@ from src.manifest_builder import DetectedSmell
 from src.evolution.gate import AntiRegressionGate
 from src.utils.graph_utils import get_structural_neighbors
 from src.utils.mock_llm import generate_mutation_steps
+from src.llm import LLMClient
+
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +52,7 @@ class LLMSemanticMutator:
         logger.info(f"[MUTATOR] Semantic mutation for smell '{smell.smell_type}' on '{target_class}'")
 
         # Get LLM-guided steps
-        steps = self._get_mutation_steps(smell.smell_type, target_class)
+        steps = self._get_mutation_steps(smell, target_class, neighbors)
         mutant.applied_steps.extend(steps)
 
         # Veto gate check
@@ -60,10 +64,15 @@ class LLMSemanticMutator:
 
         return mutant
 
-    def _get_mutation_steps(self, smell_type: str, target_class: str) -> List[RefactoringStep]:
-        response_json = generate_mutation_steps(smell_type, target_class)
+    def _get_mutation_steps(self, smell, target_class, neighbors):
+        # response_json = generate_mutation_steps(smell_type, target_class)
+        client = LLMClient()
+        mutation_prompt = self._mutation_prompt(smell, target_class, neighbors)
+        raw = client.generate_json(
+            mutation_prompt
+        )
         try:
-            raw = json.loads(response_json)
+            # raw = json.loads(response_json)
             if not isinstance(raw, list):
                 raw = [raw]
             steps = []
@@ -75,6 +84,36 @@ class LLMSemanticMutator:
             return steps
         except json.JSONDecodeError:
             return []
+        
+    def _mutation_prompt(self, smell, target_class, neighbors):
+        return f"""
+            You are an architecture refactoring expert.
+
+            Smell Type:
+            {smell.smell_type}
+
+            Target Class:
+            {target_class}
+
+            Dependencies:
+
+            {neighbors}
+
+            Generate refactoring steps.
+
+            Output JSON ONLY.
+
+            [
+            {{
+                "operation":"SplitClass",
+                "target_class":"...",
+                "source_class":null,
+                "affected_methods":["..."],
+                "estimated_loc_impact":100,
+                "rationale":"..."
+            }}
+            ]
+        """
 
     def report(self) -> Dict[str, int]:
         return {
