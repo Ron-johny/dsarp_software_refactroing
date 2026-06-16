@@ -10,6 +10,7 @@ __pycache__/
 *.pyc
 
 /venv/
+/venv312
 .vscode/
 output/
 tika/
