@@ -95,15 +95,17 @@ If you have run out of energy or time for your project, put a note at the top of
 
 # HPC vLLM Inference & Local Integration Guide
 
-This guide explains how to launch the **Qwen2.5-Coder-14B-Instruct** model on the **Noctua 2 HPC cluster** using **Apptainer**, and securely expose the inference endpoint to your local machine for integration with the Software Architectural Refactoring Pipeline.
+This guide explains how to launch the **Qwen3-Coder-30B-A3B-Instruct** model on the **Noctua 2 HPC cluster** using **Apptainer**, and securely expose the inference endpoint to your local machine or cluster login nodes for integration with the **Software Architectural Refactoring Pipeline**.
 
 ---
 
 # Part 1: Launching vLLM on the HPC Cluster
 
-To avoid shared library issues (such as `libpython3.11.so.1.0`) that can occur with host virtual environments, we use a self-contained **Apptainer sandbox** containing its own Python environment, CUDA dependencies, and the vLLM framework.
+To avoid host environment conflicts, we use a custom **Apptainer** container (`vllm_qwen3.sif`) along with an automated startup script (`start_vllm.sh`) that manages Apptainer modules, environment variable overrides, and multi-GPU tensor parallelism.
 
-## 0. Navigate to the Project Directory
+## 1. Navigate to the Project Workspace
+
+Log into the cluster and change to the project directory:
 
 ```bash
 cd /scratch/hpc-prf-dssecs/pg_arc_ref/hpc_api
@@ -111,11 +113,9 @@ cd /scratch/hpc-prf-dssecs/pg_arc_ref/hpc_api
 
 ---
 
-## 1. Allocate GPU Resources
+## 2. Allocate GPU Resources
 
-Log into **Noctua 2** and allocate a GPU node with **at least two A100 GPUs** for tensor parallelism.
-
-### Option 1: Interactive `srun`
+Request an interactive session on a GPU node with at least **two GPUs** (Tensor Parallelism size = 2) and an explicit time limit.
 
 ```bash
 srun \
@@ -125,69 +125,92 @@ srun \
     --qos=devel \
     --gres=gpu:a100:2 \
     --mem=100G \
-    --time=03:00:00 \
+    --time=04:00:00 \
     --pty bash
-```
-
-### Option 2: `salloc`
-
-```bash
-salloc \
-    -A <your_project_account> \
-    -p gpu \
-    --gres=gpu:a100:2 \
-    --time=05:00:00
 ```
 
 ---
 
-## 2. Keep the Server Running with tmux
+## 3. Keep the Server Alive with tmux
 
-To prevent the server from stopping if your SSH connection drops, run it inside a `tmux` session.
+Once you land on the assigned GPU compute node (e.g., `n2dgx01`), create or attach to a `tmux` session so the server continues running even if your SSH session disconnects.
 
-Create a new session:
+Start a new session:
 
 ```bash
 tmux new -s vllm_hosting
 ```
 
-Useful commands:
+Useful `tmux` commands:
+
+- **Detach:** `Ctrl + B`, then `D`
+- **Reattach later:**
 
 ```bash
-# Detach from the session
-Ctrl + B, then D
-
-# Reattach later
 tmux attach -t vllm_hosting
 ```
 
 ---
 
-## 3. Launch the vLLM Server
+## 4. If `tmux` Doesn't Load
 
-From the root of the `hpc_api` directory, start the Apptainer container.
+If `tmux` is unavailable, load the module first:
 
 ```bash
-apptainer run --nv ./vllm_sandbox \
-    --model ./models/Qwen2.5-Coder-14B-Instruct \
-    --host 0.0.0.0 \
-    --port 8000 \
-    --trust-remote-code \
-    --max-model-len 16384 \
-    --tensor-parallel-size 2
+module load tools/tmux 2>/dev/null || module load tmux 2>/dev/null
 ```
 
-> **Important:** Note the hostname of the compute node assigned by Slurm (for example, `n2dgx01`). You will need this hostname when creating the SSH tunnel.
+Then start your session again:
+
+```bash
+tmux new -s vllm_hosting
+```
 
 ---
 
-# Part 2: Accessing the Model from Your Local Machine
+## 5. Run the vLLM Server Script
 
-The Noctua 2 compute nodes are not publicly accessible. To access the running vLLM server from your local computer, create an **SSH port-forwarding tunnel**.
+Inside your `tmux` window on the compute node, run:
 
-## 1. Create the SSH Tunnel
+```bash
+./start_vllm.sh
+```
 
-On your **local machine**, open a new terminal (or Git Bash), navigate to the directory containing your SSH private key (`id_ed25519`), and execute:
+**Optional:** To run a different model or adjust the tensor parallel size:
+
+```bash
+./start_vllm.sh ./models/Qwen2.5-Coder-14B-Instruct 1
+```
+
+> **Note:** Record the compute node hostname (e.g., `n2dgx01`). You'll need it when calling the API from login nodes or when creating an SSH tunnel from your local machine.
+
+---
+
+# Part 2: Accessing the Model API
+
+## Option A: From HPC Login Nodes
+
+Directly reference the compute node hostname in your API requests.
+
+Example:
+
+```bash
+curl http://n2dgx01:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "./models/Qwen3-Coder-30B-A3B-Instruct",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 50
+  }'
+```
+
+---
+
+## Option B: From Your Local Machine (SSH Port Forwarding)
+
+To access the server via `http://localhost:8000`, create an SSH tunnel to the active compute node.
+
+Run the following command (replace `n2dgx01` with your assigned compute node if different):
 
 ```bash
 ssh \
@@ -197,11 +220,9 @@ ssh \
     ankitah@n2login3
 ```
 
-> **Note:** Replace `n2dgx01` with the hostname of the compute node allocated in the previous step if it differs.
+Keep this terminal open while using the API.
 
-Keep this terminal window open for the duration of your session.
-
-Once connected, your local machine can access the vLLM server at:
+You can now access the server at:
 
 ```
 http://localhost:8000
@@ -209,37 +230,35 @@ http://localhost:8000
 
 ---
 
-# Part 3: Using the Model in Python
+# Part 3: Python API Integration Example
 
-With the SSH tunnel active, your local machine can communicate with the remote model using the OpenAI-compatible vLLM API.
+With either:
 
-## 1. Install the OpenAI Python Client
+- `http://localhost:8000/v1` (using an SSH tunnel), or
+- `http://n2dgx01:8000/v1` (running directly on the cluster),
 
-```bash
-pip install openai
-```
-
----
-
-## 2. Example Integration
+use the following Python code:
 
 ```python
 from openai import OpenAI
 
+# Set base_url to "http://n2dgx01:8000/v1" if running on a cluster node,
+# or "http://localhost:8000/v1" if using an SSH tunnel.
 client = OpenAI(
-    base_url="http://localhost:8000/v1",
-    api_key="hpc-token",  # Dummy value; authentication is not enforced by vLLM
+    base_url="http://n2dgx01:8000/v1",
+    api_key="EMPTY",  # vLLM does not require an API key by default
 )
+
 
 def analyze_code_architecture(snippet: str) -> str:
     response = client.chat.completions.create(
-        model="./models/Qwen2.5-Coder-14B-Instruct",
+        model="./models/Qwen3-Coder-30B-A3B-Instruct",
         messages=[
             {
                 "role": "system",
                 "content": (
                     "You are an expert software architect specializing "
-                    "in software refactoring and modular design."
+                    "in clean code, design patterns, and backend refactoring."
                 ),
             },
             {
@@ -252,7 +271,7 @@ def analyze_code_architecture(snippet: str) -> str:
             },
         ],
         temperature=0.2,
-        max_tokens=1024,
+        max_tokens=1500,
     )
 
     return response.choices[0].message.content
@@ -265,12 +284,40 @@ if __name__ == "__main__":
 
 ---
 
-# Workflow Summary
+# Quick Workflow Checklist
 
-1. Navigate to the `hpc_api` directory.
-2. Allocate a GPU node with two A100 GPUs.
-3. Start a `tmux` session.
-4. Launch the vLLM server inside the Apptainer sandbox.
-5. Record the allocated compute node hostname.
-6. Create an SSH port-forwarding tunnel from your local machine.
-7. Connect to the model using the OpenAI Python client via `http://localhost:8000/v1`.
+```bash
+# Navigate to the project
+cd /scratch/hpc-prf-dssecs/pg_arc_ref/hpc_api
+
+# Allocate GPU resources
+srun --partition=dgx --gres=gpu:a100:2 --time=04:00:00 --pty bash
+
+# If tmux is unavailable
+module load tools/tmux 2>/dev/null || module load tmux 2>/dev/null
+
+# Start tmux
+tmux new -s vllm_hosting
+
+# Launch the vLLM server
+./start_vllm.sh
+```
+
+Finally, either:
+
+- Connect directly using the compute node hostname (e.g., `http://n2dgx01:8000`), or
+- Create an SSH tunnel:
+
+```bash
+ssh \
+    -i ./id_ed25519 \
+    -o ProxyCommand="ssh -i ./id_ed25519 -W %h:%p ankitah@fe.noctua2.pc2.uni-paderborn.de" \
+    -L 8000:n2dgx01:8000 \
+    ankitah@n2login3
+```
+
+Then access the API at:
+
+```
+http://localhost:8000
+```
