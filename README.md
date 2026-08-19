@@ -98,6 +98,16 @@ If you have run out of energy or time for your project, put a note at the top of
 This guide explains how to launch the **Qwen3-Coder-30B-A3B-Instruct** model on the **Noctua 2 HPC cluster** using **Apptainer**, and securely expose the inference endpoint to your local machine or cluster login nodes for integration with the **Software Architectural Refactoring Pipeline**.
 
 ---
+# Part 0: Logging to HPC 
+```bash 
+ssh -i ./id_ed25519 ankitah@fe.noctua2.pc2.uni-paderborn.de 
+```
+You would need ./id_ed25519 HPC hash key to access the node and you would need also need the password.
+```bash 
+ssh noctua2
+```
+
+--- 
 
 # Part 1: Launching vLLM on the HPC Cluster
 
